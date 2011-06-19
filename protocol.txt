@@ -1,0 +1,61 @@
+
+-- PROTOCOL --
+BYTE    LENGTH  DESCRIPTION
+0       1       command
+1       1       payload len
+2       var     payload data
+
+
+-- COMMANDS --
+
+Debug message  (A -> PC)
+command: 0x00
+Payload: debug info
+
+
+Ack (A -> PC)
+command: 0x01
+Payload: NULL
+
+
+Ident (both)
+command: 0x02
+payload to arduino: empty
+payload to pc: ident string
+
+
+Set RGB (PC -> A)
+command: 0x10
+payload: GROUP R G B
+returns: ack
+
+
+Set Cycle mode (PC -> A)
+command: 0x11
+payload: GROUP CYCLE_SPEED SATURATION LIGHTNESS
+         GROUP:       byte (255 all groups)
+         CYCLE_SPEED: ms per 0.001 hue (0 <= hue <= 1)
+         SATURATION:  byte
+         LIGHTNESS:   byte
+returns: ack
+
+
+Kaku on (PC -> A)
+command: 0x20
+payload: GROUP MODULE
+         GROUP:  byte
+         MODULE: byte
+returns: ack
+
+
+Kaku off (PC -> A)
+command: 0x21
+payload: GROUP MODULE
+         GROUP:  byte
+         MODULE: byte
+returns: ack
+
+
+
+
+

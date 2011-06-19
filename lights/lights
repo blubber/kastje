@@ -1,0 +1,72 @@
+#!/usr/bin/env python
+
+import sys
+from arduino import server, client
+from optparse import OptionParser
+from gui import gui
+import gtk
+
+
+def main (run_server = False):
+    parser = OptionParser()
+ 
+    parser.add_option('-C', '--config-dir', action='store',
+                      type='string', default='/etc/lights',
+                      help='Specify a optional config directory.')
+    
+    if run_server:
+        parser.add_option('-d', '--daemon', action='store_true',
+                          default=False,
+                          help='Run as daemon.')
+    else:
+        parser.add_option('-p', '--preset', action='store',
+                          default=False,
+                          help='Set a preset.')
+        
+        parser.add_option('-c', '--cycle', action='store',
+                          default=False,
+                          help='Cycle colors.')
+        parser.add_option('-r', '--rgb', action='store',
+                          default=False,
+                          help='Set RGB colors.')
+        
+        parser.add_option('-a', '--aan', action='store',
+                          default=False,
+                          help='Turn on a kaku switch.')
+        parser.add_option('-u', '--uit', action='store',
+                          default=False,
+                          help='Turn off a kaku switch.')
+
+        parser.add_option('-g', '--gui', action='store_true',
+                          default = False,
+                          help='Start gui.')
+    
+    (options, args) = parser.parse_args()
+
+    if run_server:
+        server.start(options.daemon, options.config_dir)
+    else:
+        client.init(options.config_dir)
+
+        if options.preset:
+            client.set_preset(options.preset)
+        if options.aan:
+            client.kaku(True, *options.aan.split(':'))
+        if options.uit:
+            client.kaku(False, *options.uit.split(':'))
+
+        if options.cycle:
+            client.cycle(*options.cycle.split(':'))
+        if options.rgb:
+            client.rgb(*options.rgb.split(':'))
+
+        if options.gui:
+            window = gtk.Window()
+            gui.Gui(window)
+            gtk.main()
+            
+if __name__ == '__main__':
+    if sys.argv[0].endswith('lightsd'):
+        main(True)
+    else:
+        main()
