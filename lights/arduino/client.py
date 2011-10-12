@@ -11,6 +11,8 @@ class UnknownAlias(ArduinoError): pass
 config = {
     'ledgroups': {},
     'kaku': {},
+    'server_address': '-1',
+    'server_port': 31337,
     }
 
 """ Presets. Use the presets_write function to commit to disk. """
@@ -41,15 +43,19 @@ class Message (object):
 
     def send (self):
         try:
-            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            sock.connect('/tmp/lights')
+            if config['server_address'] == '-1':
+                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                sock.connect('/tmp/lights')
+            else:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.connect((config['server_address'], config['server_port']))
         except Exception, e:
             raise ArduinoError("Unable to connect")
 
         sock.send(struct.pack('BB', self.cmd, self.payload_len))
         if self.payload_len > 0:
             sock.send(self.payload)
-
+        
         data = ''
         while True:
             _data = sock.recv(64)
@@ -350,13 +356,13 @@ def parse_presets (config_dir):
 def parse_config (config_dir):
     """ Parse client config file. """
     global config
-    
     lines = filter(lambda l: not (l.startswith('#') or len(l) == 0),
                    [l.strip() for l in open("%s/client.conf" % config_dir,
                                             'r').readlines()])
 
     ledgroup_re = re.compile('^ledgroup\[([0-9]+)\][ \t]*=[ \t]*([a-zA-Z0-9]+)$')
     kaku_re = re.compile('kaku[ \t]*=[ \t]*([a-zA-Z]+):([1-4]):([1-4])$')
+    kv_re = re.compile('([a-z_]+)[ \t]*=[ \t]*([a-z0-9._-]+)')
     
     for l in lines:
         m = ledgroup_re.match(l)
@@ -376,7 +382,14 @@ def parse_config (config_dir):
             except ValueError, e:
                 print "Error parsing kaku alias."
                 sys.exit(-1)
-
-
-
+    
+        m = kv_re.match(l)
+        if m:
+            k = m.group(1).strip()
+            v = m.group(2).strip()
+            if k in config:
+                if type(config[k]) == int:
+                    config[k] = int(v)
+                else:
+                    config[k] = v
 
