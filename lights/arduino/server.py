@@ -1,7 +1,6 @@
 
 import sys, time, os, serial, sys, socket, select, struct
-import os.path, signal, gobject, dbus
-from dbus.mainloop.glib import DBusGMainLoop
+import os.path, signal
 
 config = {
     'device': '/dev/ttyUSB0',
@@ -13,9 +12,9 @@ config = {
     }
 
 
-mainloop = None
 server_socket = None
 sockets = []
+running = True
 serial_con = None
 logfile = None
 
@@ -98,7 +97,7 @@ def cleanup (arg1 = None, arg2 = None):
     
     log("Cleaning up")
 
-    mainloop.quit()
+    running = False
 
     for s in sockets:
         s.shutdown(socket.SHUT_RDWR)
@@ -120,7 +119,7 @@ def cleanup (arg1 = None, arg2 = None):
     except OSError, e: pass
 
 
-def client_socket_listener (sock, *args):
+def client_socket_listener (sock):
     data = sock.recv(4096)
 
     if len(data) == 0:
@@ -142,29 +141,9 @@ def client_socket_listener (sock, *args):
     sock.send(chr(l))
     sock.send(p)
 
-    sock.shutdown(socket.SHUT_RDWR)
-    sock.close()
-    sockets.remove(sock)
-    
-    return False
-    
 
-def server_socket_listener (sock, *args):
-    client_socket, addr = sock.accept()
-    sockets.append(client_socket)
-    gobject.io_add_watch(client_socket, gobject.IO_IN, client_socket_listener)
-    return True
-
-
-def suspend_handler ():
-    global serial_con
-
-    if serial_con:
-        serial_con.close()
-
-        
 def start (daemon, config_dir):
-    global mainloop, serial_con
+    global serial_con, sockets
     
     parse_config('%s/daemon.conf' % config_dir)
     if daemon == True: config['daemon'] = True
@@ -179,12 +158,6 @@ def start (daemon, config_dir):
         print e
         sys.exit(-1)
 
-    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
-    bus = dbus.SystemBus()
-    bus.add_signal_receiver(suspend_handler,
-                            dbus_interface="org.freedesktop.UPower",
-                            signal_name="Sleeping")
-    
     if config['daemon']:
         if not os.getuid() == 0:
             print "You must start the daemon as root."
@@ -239,23 +212,24 @@ def start (daemon, config_dir):
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind('/tmp/lights')
     server_socket.listen(1)
-    gobject.io_add_watch(server_socket, gobject.IO_IN, server_socket_listener)
         
     signal.signal(signal.SIGINT, cleanup)
-    mainloop = gobject.MainLoop()
-    try:
-        log("Running")
-        mainloop.run()
-    except KeyboardInterrupt, e:
-        cleanup()
-        
-
-
-
-
-
-
-
-
-
-        
+    while running:
+        s = sockets + [server_socket]
+        try:
+            r, _, e = select.select(s, [], s)
+        except Exception as e:
+            break
+        for _s in r:
+            if _s == server_socket:
+                client_socket, addr = server_socket.accept()
+                sockets.append(client_socket)
+            else:
+                client_socket_listener(_s)
+        for _s in e:
+            _s.close()
+            _s.shutdown()
+            if _s == server_socket:
+                cleanup()
+            else:
+                socket.remove(_s)
