@@ -3,8 +3,6 @@
 import sys
 from arduino import server, client
 from optparse import OptionParser
-from gui import gui
-import gtk
 
 
 def main (run_server = False):
@@ -37,10 +35,6 @@ def main (run_server = False):
                           default=False,
                           help='Turn off a kaku switch.')
 
-        parser.add_option('-g', '--gui', action='store_true',
-                          default = False,
-                          help='Start gui.')
-    
     (options, args) = parser.parse_args()
 
     if run_server:
@@ -60,10 +54,6 @@ def main (run_server = False):
         if options.rgb:
             client.rgb(*options.rgb.split(':'))
 
-        if options.gui:
-            window = gtk.Window()
-            gui.Gui(window)
-            gtk.main()
             
 if __name__ == '__main__':
     if sys.argv[0].endswith('lightsd'):
