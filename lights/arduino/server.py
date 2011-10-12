@@ -9,6 +9,8 @@ config = {
     'uid': 1000,
     'gid': 20,
     'daemon': False,
+    'listen_address': '-1',
+    'listen_port': 31337,
     }
 
 
@@ -93,8 +95,6 @@ def parse_config (config_file):
 
 
 def cleanup (arg1 = None, arg2 = None):
-    global mainloop
-    
     log("Cleaning up")
 
     running = False
@@ -208,9 +208,14 @@ def start (daemon, config_dir):
         #sys.stderr.close()
         #sys.stdin.close()
 
-    server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_socket.bind('/tmp/lights')
+    if config['listen_address'] == '-1':
+        server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket.bind('/tmp/lights')
+    else:
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket.bind((config['listen_address'], config['listen_port']))
     server_socket.listen(1)
         
     signal.signal(signal.SIGINT, cleanup)
