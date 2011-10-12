@@ -48,8 +48,6 @@ CommMessage ident_callback (CommMessage msg) {
   return comm_new(MSG_IDENT, strlen(IDENT_STRING), IDENT_STRING);
 }
 
-
-
 int main() {
   init(); // Init arduino stuff DO NOT REMOVE
 
@@ -132,6 +130,7 @@ int main() {
             }
           } else if (i == 7) {            
             if ((m - last_press > 50)) {
+              delay(1000);
               leds_sync_rf(0);
             }
           } else if (i == 1) {

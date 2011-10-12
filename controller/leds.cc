@@ -19,10 +19,15 @@ void leds_set_color (int id, ColorRGB color) {
   }
 
   groups[id].color = color;
-  analogWrite(groups[id].pin_r, color.r);
-  analogWrite(groups[id].pin_g, color.g);
-  analogWrite(groups[id].pin_b, color.b);
   groups[id].cycling = false;
+  
+  if (groups[id].type == LEDS_PWM) {
+    analogWrite(groups[id].pin_r, color.r);
+    analogWrite(groups[id].pin_g, color.g);
+    analogWrite(groups[id].pin_b, color.b);
+  } else if (groups[id].type == LEDS_RF) {
+    send_rgb(color.r, color.g, color.b);
+  }
 }
 
 
