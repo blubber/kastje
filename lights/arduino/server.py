@@ -1,6 +1,7 @@
 
 import sys, time, os, serial, sys, socket, select, struct
 import os.path, signal
+import threading
 
 config = {
     'device': '/dev/ttyUSB0',
@@ -14,15 +15,67 @@ config = {
     }
 
 
-server_socket = None
-sockets = []
+unix_socket = None
+tcp_socket = None
 running = True
 serial_con = None
 logfile = None
+serial_lock = threading.Lock()
+clients = {}
+
+
+class Client (object):
+    
+    def __init__ (self, socket):
+        self.socket = socket
+        self.buffer = ''
+
+    def close (self):
+        del clients[self.socket]
+        try:
+            self.socket.shutdown(socket.RDWR)
+        except Exception as e:
+            pass
+        self.socket.close()
+
+    def read (self):
+        try:
+            data = self.socket.recv(32)
+        except Exception as e:
+            print e
+            self.close()
+            return
+
+        if len(data) == 0:
+            self.close()
+            return
+
+        self.buffer += data
+        self._parse_buffer()
+
+    def _parse_buffer (self):
+        if len(self.buffer) < 2:
+            return
+        cmd, _len = struct.unpack('BB', self.buffer[0:2])
+        if len(self.buffer) < 2 + _len:
+            return
+        payload = self.buffer[2:2+_len]
+        self.buffer = self.buffer[2+_len:]
+        c, l, p = send(cmd, _len, payload)
+        try:
+            self.socket.send(c)
+            self.socket.send(chr(l))
+            self.socket.send(p)
+        except Exception as e:
+            print e
+            self.close()
 
 
 def send (cmd, payload_len = 0, payload = None):
     global serial_con
+    
+    if not serial_lock.acquire(False):
+        return
 
     if not serial_con:
         try:
@@ -39,9 +92,9 @@ def send (cmd, payload_len = 0, payload = None):
             log("Unable to reopen serial connection '%s': %s" % \
                     (config['device'], e))
             sys.exit(-1)
-            
+    
     if type(cmd) == int:
-        serial_con.target.write(chr(cmd))
+        serial_con.write(chr(cmd))
     else:
         serial_con.write(cmd)
 
@@ -50,14 +103,17 @@ def send (cmd, payload_len = 0, payload = None):
     if payload_len > 0:
         for b in payload:
             serial_con.write(b)
-        
+    
+    serial_con.flush()        
     c = serial_con.read()
     l = ord(serial_con.read())
     p = ''
     
     while len(p) < l:
         p += serial_con.read(l - len(p))
-
+    
+    time.sleep(0.01) # Give the ardiuno some time to process. 
+    serial_lock.release()
     return (c, l, p)
 
 
@@ -95,17 +151,24 @@ def parse_config (config_file):
 
 
 def cleanup (arg1 = None, arg2 = None):
+    global clients
     log("Cleaning up")
 
     running = False
 
-    for s in sockets:
-        s.shutdown(socket.SHUT_RDWR)
-        s.close()
+    for socket in clients:
+        try:
+            socket.shutdown(socket.SHUT_RDWR)
+        except Exception as e:
+            pass
+        socket.close()
 
-    if server_socket:
-        server_socket.shutdown(socket.SHUT_RDWR)
-        server_socket.close()
+    if unix_socket:
+        unix_socket.shutdown(socket.SHUT_RDWR)
+        unix_socket.close()
+    if tcp_socket:
+        tcp_socket.shutdown(socket.SHUT_RDWR)
+        tcp_socket.close()
 
     if serial_con:
         serial_con.close()
@@ -120,28 +183,9 @@ def cleanup (arg1 = None, arg2 = None):
 
 
 def client_socket_listener (sock):
-    data = sock.recv(4096)
+    pass
 
-    if len(data) == 0:
-        sock.shutdown(socket.SHUT_RDWR)
-        sock.close()
-        sockets.remove(sock)
-        return False
-
-    cmd = data[0]
-    payload_len = ord(data[1])
-    if payload_len > 0:
-        payload = data[2:]
-    else:
-        payload = None
-
-    c, l, p = send(cmd, payload_len, payload)
-
-    sock.send(c)
-    sock.send(chr(l))
-    sock.send(p)
-
-
+   
 def start (daemon, config_dir):
     global serial_con, sockets
     
@@ -208,33 +252,34 @@ def start (daemon, config_dir):
         #sys.stderr.close()
         #sys.stdin.close()
 
-    if config['listen_address'] == '-1':
-        server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server_socket.bind('/tmp/lights')
-    else:
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server_socket.bind((config['listen_address'], config['listen_port']))
-    server_socket.listen(1)
+    unix_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    unix_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    unix_socket.bind('/tmp/lights')
+    unix_socket.listen(1)
+    server_sockets = [unix_socket]
+    
+    if not config['listen_address'] == '-1':
+        tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        tcp_socket.bind((config['listen_address'], config['listen_port']))
+        tcp_socket.listen(1)
+        server_sockets.append(tcp_socket)
         
     signal.signal(signal.SIGINT, cleanup)
     while running:
-        s = sockets + [server_socket]
-        try:
-            r, _, e = select.select(s, [], s)
-        except Exception as e:
-            break
-        for _s in r:
-            if _s == server_socket:
-                client_socket, addr = server_socket.accept()
-                sockets.append(client_socket)
-            else:
-                client_socket_listener(_s)
-        for _s in e:
-            _s.close()
-            _s.shutdown()
-            if _s == server_socket:
+        sockets = clients.keys() + server_sockets
+        r, _, e = select.select(sockets, [], sockets, 1)
+        for s in e:
+            if s in server_sockets:
                 cleanup()
             else:
-                socket.remove(_s)
+                clients[s].close()
+        for s in r:
+            if s in server_sockets:
+                client_socket, addr = s.accept()
+                clients[client_socket] = Client(client_socket)
+            else:
+                clients[s].read()
+
+    if running:
+        cleanup()
