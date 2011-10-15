@@ -82,3 +82,22 @@ class Config (UserDict.UserDict):
                     self.kaku_aliases[k]['module'])
         else:
             return None
+
+class Presets (UserDict.UserDict):
+
+    def __init__ (self):
+        UserDict.UserDict.__init__(self)
+        self.confdir = os.getenv("LIGHTS_CONFDIR", "/etc/lights/")
+        configfile = os.path.join(self.confdir, 'presets.conf')
+
+        if not os.path.isfile(configfile):
+            configfile = './presets.conf'
+            if not os.path.isfile(configfile):
+                return
+        
+        with open(configfile, 'r') as fp:
+            data = json.loads(fp.read())
+        
+        for k, v in data.items():
+            self.data[k.encode('ascii')] = [x.encode('ascii').split(':') for x in v]
+ 

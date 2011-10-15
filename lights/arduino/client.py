@@ -6,7 +6,7 @@ class InvalidArgument(ArduinoError): pass
 class UnknownAlias(ArduinoError): pass
 
 config = arduino.utils.Config()
-presets = {}
+presets = arduino.utils.Presets()
 
 class Message (object):
     """ A general purpose Message class """
@@ -266,15 +266,15 @@ def set_preset (preset):
     preset = preset.lower()
     if preset not in presets:
         raise ArduinoError('Unknown preset')
-    
+        
     for item in presets[preset]:
         if item[0] == 'led':
             if item[1] == 'rgb':
-                rgb(*item[2])
+                rgb(*item[2:])
             elif item[1] == 'cycle':
-                cycle(*item[2])
+                cycle(*item[2:])
         elif item[0] == 'kaku':
-            kaku(item[1], *item[2])
+            kaku(int(item[1]), *[int(x) for x in item[2:]])
 
 
 def commit_presets (config_dir):
