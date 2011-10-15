@@ -7,3 +7,4 @@ arduino-core/
 *.hex
 *.elf
 lights/lights.conf
+lights/presets.conf
