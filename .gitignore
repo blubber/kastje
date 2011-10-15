@@ -2,4 +2,8 @@
 *.pyo
 test.sh
 test.py
-
+arduino-core/
+*.o
+*.hex
+*.elf
+lights/lights.conf
