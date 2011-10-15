@@ -85,10 +85,10 @@ def kaku (state, *args):
         try:
             group = int(args[0])
         except ValueError, e:
-            alias = args[0].lower().strip()
-            if alias in config['kaku']:
-                group = config['kaku'][alias][0]
-                module = config['kaku'][alias][1]
+            alias = config.kaku_alias(args[0].lower().strip())
+            if alias:
+                group = alias[0]
+                module = alias[1]
             else:
                 raise UnknownAlias("Alias '%s' unknown" % alias)
     elif len(args) == 2:
@@ -146,9 +146,9 @@ def rgb (*args):
         try:
             group = int(args[0])
         except ValueError, e:
-            alias = args[0].lower().strip()
-            if alias in config['ledgroups']:
-                group = config['ledgroups'][alias]
+            alias = config.led_alias(args[0].lower().strip())
+            if not alias is None:
+                group = alias
             else:
                 raise UnknownAlias("Ledgroup '%s' unknwon." % alias)
     elif len(args) > 4:
@@ -225,9 +225,9 @@ def cycle (*args):
         try:
             group = int(group)
         except ValueError, e:
-            alias = group.lower().strip()
-            if alias in config['ledgroups']:
-                group = config['ledgroups'][alias]
+            alias = config.led_alias(group.lower().strip())
+            if not alias is None:
+                group = alias
             else:
                 raise UnknownAlias("Ledgroup '%s' unknown." % alias)
 
