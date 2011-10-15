@@ -8,7 +8,7 @@
 #define N_LED_GROUPS 2
 
 /* Flash ledgroup when init is done, -1 for no flash */
-#define FLASH_LED_GROUP 0
+#define FLASH_LED_GROUP -1
 
 /* Kaku output pin */
 #define RF_TX_PIN 12

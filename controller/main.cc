@@ -92,9 +92,6 @@ int main() {
   static uint32_t last_press = 0;
 #endif
 
-  ColorRGB r = { 0, 255, 255 };
-  leds_set_color(0, r);
-
   for (;;) {
     comm_serial_loop();
     leds_loop();
