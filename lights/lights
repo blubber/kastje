@@ -7,16 +7,8 @@ from optparse import OptionParser
 
 def main (run_server = False):
     parser = OptionParser()
- 
-    parser.add_option('-C', '--config-dir', action='store',
-                      type='string', default='/etc/lights',
-                      help='Specify a optional config directory.')
-    
-    if run_server:
-        parser.add_option('-d', '--daemon', action='store_true',
-                          default=False,
-                          help='Run as daemon.')
-    else:
+
+    if not run_server: 
         parser.add_option('-p', '--preset', action='store',
                           default=False,
                           help='Set a preset.')
@@ -38,10 +30,8 @@ def main (run_server = False):
     (options, args) = parser.parse_args()
 
     if run_server:
-        server.start(options.daemon, options.config_dir)
+        server.start()
     else:
-        client.init(options.config_dir)
-
         if options.preset:
             client.set_preset(options.preset)
         if options.aan:

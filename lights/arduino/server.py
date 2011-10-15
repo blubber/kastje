@@ -2,17 +2,7 @@
 import sys, time, os, serial, sys, socket, select, struct
 import os.path, signal
 import threading
-
-config = {
-    'device': '/dev/ttyUSB0',
-    'pidfile': '/home/blubber/Workspace/lightcontrol/lights/lightd.pid',
-    'logfile': '/home/blubber/Workspace/lightcontrol/lights/lightd.log',
-    'uid': 1000,
-    'gid': 20,
-    'daemon': False,
-    'listen_address': '-1',
-    'listen_port': 31337,
-    }
+from arduino.utils import Config
 
 
 unix_socket = None
@@ -22,6 +12,7 @@ serial_con = None
 logfile = None
 serial_lock = threading.Lock()
 clients = {}
+config = Config()
 
 
 class Client (object):
@@ -128,28 +119,6 @@ def log (msg):
         print msg
 
 
-def parse_config (config_file):
-    fp = open(config_file, 'r')
-    lines = fp.readlines()
-    fp.close()
-
-    for l in map(lambda l: l.strip(), lines):
-        if l.startswith('#'): continue
-
-        parts = l.split('=')
-        if not len(parts) is 2: continue
-        k = parts[0].strip()
-        v = parts[1].strip()
-
-        if k in config:
-            if type(config[k]) == int:
-                try:
-                    v = int(v)
-                except ValueError, e:
-                    print "Unable to parse config key '%s' expected an int" % k
-            config[k] = v
-
-
 def cleanup (arg1 = None, arg2 = None):
     global clients
     log("Cleaning up")
@@ -182,16 +151,9 @@ def cleanup (arg1 = None, arg2 = None):
     except OSError, e: pass
 
 
-def client_socket_listener (sock):
-    pass
-
-   
-def start (daemon, config_dir):
+def start ():
     global serial_con, sockets
     
-    parse_config('%s/daemon.conf' % config_dir)
-    if daemon == True: config['daemon'] = True
-
     if os.path.isfile('/tmp/lights'):
         print "Unix socket exists, is the server running?"
         sys.exit(-1)
@@ -202,66 +164,16 @@ def start (daemon, config_dir):
         print e
         sys.exit(-1)
 
-    if config['daemon']:
-        if not os.getuid() == 0:
-            print "You must start the daemon as root."
-            sys.exit(-1)
-
-        if os.path.isfile(config['pidfile']):
-            print "Pidfile already exists, is the server running?"
-            sys.exit(-1)
- 
-        if not os.path.isfile(config['logfile']):
-            open(config['logfile'], 'w').close()
-
-        os.chown(config['logfile'], config['uid'], config['gid'])
-
-        try:
-            pid = os.fork()
-            if pid > 0:
-                sys.exit(0)
-        except OSError, e:
-            print "Unable to fork."
-            sys.exit(-1)
-
-        os.chdir("/")
-        os.umask(0)
-
-        if not os.path.isdir(os.path.dirname(config['pidfile'])):
-            os.mkdir(os.path.dirname(config['pidfile']))
-
-        os.chown(os.path.dirname(config['pidfile']), config['uid'],
-                 config['gid'])
-
-        os.setgid(config['gid'])
-        os.setuid(config['uid'])
-        os.setsid()
-        
-        try:
-            pid = os.fork()
-            if pid > 0:
-                fp = open(config['pidfile'], 'w')
-                fp.write('%d' % pid)
-                fp.close()
-                sys.exit(0)
-        except OSError, e:
-            print "Unable to fork"
-            sys.exit(-1)
-
-        #sys.stdout.close()
-        #sys.stderr.close()
-        #sys.stdin.close()
-
     unix_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     unix_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     unix_socket.bind('/tmp/lights')
     unix_socket.listen(1)
     server_sockets = [unix_socket]
     
-    if not config['listen_address'] == '-1':
+    if not config['address'] == '-1':
         tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        tcp_socket.bind((config['listen_address'], config['listen_port']))
+        tcp_socket.bind((config['address'], config['port']))
         tcp_socket.listen(1)
         server_sockets.append(tcp_socket)
         

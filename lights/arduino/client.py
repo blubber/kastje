@@ -1,23 +1,12 @@
 import socket, struct, re, sys
-
+import arduino.utils
 
 class ArduinoError(Exception): pass
 class InvalidArgument(ArduinoError): pass
 class UnknownAlias(ArduinoError): pass
 
-
-
-""" Config data, changes to this dictionary will NOT be commited to disk. """
-config = {
-    'ledgroups': {},
-    'kaku': {},
-    'server_address': '-1',
-    'server_port': 31337,
-    }
-
-""" Presets. Use the presets_write function to commit to disk. """
+config = arduino.utils.Config()
 presets = {}
-
 
 class Message (object):
     """ A general purpose Message class """
@@ -43,12 +32,12 @@ class Message (object):
 
     def send (self):
         try:
-            if config['server_address'] == '-1':
+            if config['address'] == '-1':
                 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 sock.connect('/tmp/lights')
             else:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.connect((config['server_address'], config['server_port']))
+                sock.connect((config['address'], config['port']))
         except Exception, e:
             raise ArduinoError("Unable to connect")
 
@@ -68,13 +57,6 @@ class Message (object):
 
         sock.shutdown(socket.SHUT_RDWR)
         sock.close()
-
-    
-
-def init (config_dir):
-    """ Initializes configuration data. """
-    parse_config(config_dir)
-    parse_presets(config_dir)
 
     
 
