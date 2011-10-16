@@ -1,4 +1,5 @@
 import socket, struct, re, sys
+import threading
 import arduino.utils
 
 class ArduinoError(Exception): pass
@@ -24,6 +25,11 @@ class Message (object):
     # GROUP 2 -- Kaku
     MSG_ON          = 0x20
     MSG_OFF         = 0x21
+
+    # Options
+    keepalive = False
+    socket = None
+    send_lock = threading.Lock()
     
     def __init__ (self, cmd, payload_len = 0, payload = None):
         self.cmd = type(cmd) == int and cmd or ord(cmd)
@@ -31,34 +37,44 @@ class Message (object):
         self.payload = payload
 
     def send (self):
-        try:
-            if config['address'] == '-1':
-                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                sock.connect('/tmp/lights')
-            else:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.connect((config['address'], config['port']))
-        except Exception, e:
-            raise ArduinoError("Unable to connect")
+        self.send_lock.acquire()
+        if self.socket is None:
+            try:
+                if config['address'] == '-1':
+                    self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    self.socket.connect('/tmp/lights')
+                else:
+                    self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self.socket.connect((config['address'], config['port']))
+            except Exception, e:
+                self.send_lock.release()
+                raise ArduinoError("Unable to connect")
 
-        sock.send(struct.pack('BB', self.cmd, self.payload_len))
+        self.socket.send(struct.pack('BB', self.cmd, self.payload_len))
         if self.payload_len > 0:
-            sock.send(self.payload)
+            self.socket.send(self.payload)
         
         data = ''
         while True:
-            _data = sock.recv(64)
+            _data = self.socket.recv(64)
             if len(_data) == 0:
                 break
             data += _data
             if len(data) >= 2:
                 if len(data) >= 2 + ord(data[1]):
                     break
+        
+        if not self.keepalive:
+            print "Close"
+            self.socket.shutdown(socket.SHUT_RDWR)
+            self.socket.close()
+        self.send_lock.release()
 
-        sock.shutdown(socket.SHUT_RDWR)
-        sock.close()
 
-    
+def set_keepalive (state = False):
+    """Set keepalive."""
+    Message.keepalive = state
+       
 
 def kaku (state, *args):
     """ Turn a kaku switch on or off
