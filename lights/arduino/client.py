@@ -65,7 +65,6 @@ class Message (object):
                     break
         
         if not self.keepalive:
-            print "Close"
             self.socket.shutdown(socket.SHUT_RDWR)
             self.socket.close()
         self.send_lock.release()
@@ -181,11 +180,10 @@ def rgb (*args):
         raise ValueError("R, G and B must be between 0 and 255 (inclusive).")
 
     if group == None:
-        for g in config['ledgroups']:
+        for g in [config.led_alias(x) for x in config.led_aliases]:
             Message(Message.MSG_RGB, 4,
                     struct.pack('BBBB',
-                                config['ledgroups'][g],
-                                rgb[0], rgb[1], rgb[2])).send()
+                                g, rgb[0], rgb[1], rgb[2])).send()
     else:
         Message(Message.MSG_RGB, 4, struct.pack('BBBB', group,
                                                 rgb[0], rgb[1], rgb[2])).send()
@@ -267,11 +265,10 @@ def cycle (*args):
                                   + "and 255 (inclusive)")
 
     if group == None:
-        for g in config['ledgroups']:
+        for g in [config.led_alias(x) for x in config.led_aliases]:
             Message(Message.MSG_CYCLE, 4,
                     struct.pack('BBBB',
-                                config['ledgroups'][g],
-                                speed, saturation, lightness)).send()
+                                g, speed, saturation, lightness)).send()
     else:
         Message(Message.MSG_CYCLE, 4,
                 struct.pack('BBBB', group, 
@@ -282,7 +279,8 @@ def set_preset (preset):
     preset = preset.lower()
     if preset not in presets:
         raise ArduinoError('Unknown preset')
-        
+    
+    set_keepalive(True)
     for item in presets[preset]:
         if item[0] == 'led':
             if item[1] == 'rgb':
